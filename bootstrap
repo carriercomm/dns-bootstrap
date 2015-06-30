@@ -1,0 +1,65 @@
+#!/bin/bash
+
+if [[ $# != 1 ]]; then
+	echo 'USAGE:'
+	echo '	bootstrap <domain>'
+	exit 1
+fi
+
+DOMAIN=$1
+
+ADDRESS=$(ifconfig eth0 | grep -w inet | cut -d: -f2 | cut -d ' ' -f1)
+NETMASK=$(ifconfig eth0 | grep -w inet | cut -d: -f4 | cut -d ' ' -f1)
+GATEWAY=$(ip route | grep default | cut -d' ' -f3)
+REVERSE_ZONE=$(echo ${ADDRESS} | awk 'BEGIN{FS="."}{print $3"."$2"."$1".in-addr.arpa"}')
+
+# Rewrite the network configuration for eth0
+function update_network() {
+	ifdown eth0
+  cat > /etc/network/interfaces.d/eth0.cfg <<-EOF
+		# The primary network interface
+		auto eth0
+		iface eth0 inet static
+		address ${1}
+		netmask ${2}
+		gateway ${3}
+		dns-search ${4}
+		dns-nameservers ${5}
+		EOF
+	ifup eth0
+}
+
+# Stage 1:
+# Set the new domain in resolv.conf
+# Puppet relies on this for $::domain
+
+update_network $ADDRESS $NETMASK $GATEWAY $DOMAIN 8.8.8.8
+
+# Stage 2:
+# Install orchestration
+
+wget -q -O- http://apt.puppetlabs.com/pubkey.gpg | apt-key add -
+echo 'deb http://apt.puppetlabs.com trusty main dependencies' > /etc/apt/sources.list.d/puppetlabs.list
+apt-get -y update
+
+apt-get -y install puppet-common
+apt-get -y install git
+
+pushd /etc/puppet/modules
+git clone https://github.com/spjmurray/puppet-bind bind
+popd
+
+puppet module install puppetlabs-concat
+
+# Stage 3:
+# Provision DNS
+
+echo "class { 'bind': zones => [ '${DOMAIN}', '${REVERSE_ZONE}' ] }" > manifest.pp
+puppet apply manifest.pp
+
+# Stage 4:
+# Make the nameserver live on the system
+
+update_network $ADDRESS $NETMASK $GATEWAY $DOMAIN 127.0.0.1
+
+# vi: set ts=2 noet:
