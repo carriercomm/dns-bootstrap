@@ -16,7 +16,7 @@ REVERSE_ZONE=$(echo ${ADDRESS} | awk 'BEGIN{FS="."}{print $3"."$2"."$1".in-addr.
 # Rewrite the network configuration for eth0
 function update_network() {
 	ifdown eth0
-  cat > /etc/network/interfaces.d/eth0.cfg <<-EOF
+	cat > /etc/network/interfaces.d/eth0.cfg <<-EOF
 		# The primary network interface
 		auto eth0
 		iface eth0 inet static
@@ -25,7 +25,7 @@ function update_network() {
 		gateway ${3}
 		dns-search ${4}
 		dns-nameservers ${5}
-		EOF
+	EOF
 	ifup eth0
 }
 
@@ -62,4 +62,4 @@ puppet apply manifest.pp
 
 update_network $ADDRESS $NETMASK $GATEWAY $DOMAIN 127.0.0.1
 
-# vi: set ts=2 noet:
+# vi: set ts=8 noet:
